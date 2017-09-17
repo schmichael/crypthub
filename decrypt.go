@@ -3,6 +3,8 @@ package main
 import (
 	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -52,6 +54,14 @@ func decrypt(r io.Reader) ([]byte, error) {
 		}
 
 		switch k := privkey.(type) {
+		case *rsa.PrivateKey:
+			plaintext, err = decryptRSA(r, k)
+			if err != nil {
+				log.Printf("rsa key %q failed with: %v", path, err)
+				return nil
+			}
+			// It worked!
+			return io.EOF
 		case crypto.Decrypter:
 			plaintext, err = decryptDecrypter(r, k)
 			if err != nil {
@@ -73,6 +83,15 @@ func decrypt(r io.Reader) ([]byte, error) {
 		return nil, fmt.Errorf("no suitable decryption key found")
 	}
 	return nil, err
+}
+
+func decryptRSA(r io.Reader, k *rsa.PrivateKey) ([]byte, error) {
+	buf, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsa.DecryptOAEP(sha256.New(), rand.Reader, k, buf, oaepLabel)
 }
 
 func decryptDecrypter(r io.Reader, k crypto.Decrypter) ([]byte, error) {

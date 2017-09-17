@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -94,7 +95,7 @@ func encryptRSA(r io.Reader, pk *rsa.PublicKey) ([]byte, error) {
 		return nil, err
 	}
 
-	cipherbuf, err := rsa.EncryptPKCS1v15(rand.Reader, pk, plainbuf)
+	cipherbuf, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, pk, plainbuf, oaepLabel)
 	if err != nil {
 		return nil, err
 	}
