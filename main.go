@@ -35,7 +35,17 @@ func main() {
 			os.Exit(1)
 		}
 	case "decrypt", "d":
-		in := base64.NewDecoder(base64.StdEncoding, os.Stdin)
+		fn := flag.Arg(1)
+		if fn == "" {
+			log.Printf("missing filename to decrypt")
+			os.Exit(1)
+		}
+		f, err := os.Open(fn)
+		if err != nil {
+			log.Printf("error opening %q: %v", fn, err)
+			os.Exit(1)
+		}
+		in := base64.NewDecoder(base64.StdEncoding, f)
 		plaintext, err := decrypt(in)
 		if err != nil {
 			log.Printf("error decrypting: %v", err)
@@ -47,6 +57,10 @@ func main() {
 			log.Printf("error outputting plaintext: %v", err)
 			os.Exit(1)
 		}
+	default:
+		log.Printf("unknown operation: %q", op)
+		flag.Usage()
+		os.Exit(127)
 	}
 
 }

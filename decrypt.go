@@ -7,82 +7,71 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"os"
+	"strings"
 
+	"github.com/hashicorp/vault/helper/password"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
 )
 
 func decrypt(r io.Reader) ([]byte, error) {
-	sockPath := os.Getenv("SSH_AUTH_SOCK")
-	if sockPath == "" {
-		return nil, fmt.Errorf("$SSH_AUTH_SOCK not set")
-	}
+	var plaintext []byte
 
-	sockFile, err := net.Dial("unix", sockPath)
-	if err != nil {
-		return nil, err
-	}
-	defer sockFile.Close()
-
-	agentClient := agent.NewClient(sockFile)
-	keys, err := agentClient.List()
-	if err != nil {
-		return nil, err
-	}
-
-	//FIXME lol can't get private keys from the agent and private keys are often encrypted on disk
-	for _, k := range keys {
-		fmt.Println(k.Format, k.Comment)
-		_, err = ssh.ParseRawPrivateKey(k.Blob)
+	// try every file to see if its a key
+	err := walkSSHDir(func(path string, info os.FileInfo, err error) error {
+		buf, err := ioutil.ReadFile(path)
 		if err != nil {
-			// most files probably aren't keys, skip
-			log.Printf("unable to parse: %v", err)
+			return err
 		}
-	}
-	/*
-		// try every file to see if its a key
-		err = filepath.Walk(sshdir, func(path string, info os.FileInfo, err error) error {
-			if path == sshdir {
+
+		privkey, err := ssh.ParseRawPrivateKey(buf)
+		if err != nil {
+			if !strings.Contains(err.Error(), "cannot decode encrypted private keys") {
+				log.Printf("error parsing private key %q: %v", path, err)
 				return nil
 			}
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
 
-			if err != nil {
-				return err
-			}
-
-			buf, err := ioutil.ReadFile(path)
-			if err != nil {
-				return err
-			}
-
-
-			switch k := privkey.(type) {
-			case crypto.Decrypter:
-				plaintext, err = decryptDecrypter(r, k)
-				if err != nil {
-					log.Printf("key %q failed with: %v", path, err)
+			// Prompt for password
+			for {
+				fmt.Fprintf(os.Stderr, "Enter password for key %q or press Ctrl-C to skip: ", path)
+				pass, err := password.Read(os.Stdin)
+				fmt.Println()
+				if err == password.ErrInterrupted {
 					return nil
 				}
-				// It worked!
-				return io.EOF
-			default:
-				log.Printf("key of type %T unsupported", k)
+				if err != nil {
+					return err
+				}
+				privkey, err = ssh.ParseRawPrivateKeyWithPassphrase(buf, []byte(pass))
+				if err != nil {
+					log.Printf("error parsing private key %q with password: %v", path, err)
+					continue
+				}
+				break
+			}
+		}
+
+		switch k := privkey.(type) {
+		case crypto.Decrypter:
+			plaintext, err = decryptDecrypter(r, k)
+			if err != nil {
+				log.Printf("key %q failed with: %v", path, err)
 				return nil
 			}
-		})
+			// It worked!
+			return io.EOF
+		default:
+			log.Printf("key of type %T unsupported", k)
+			return nil
+		}
+	})
 
-		if plaintext != nil {
-			return plaintext, nil
-		}
-		if err == nil {
-			return nil, fmt.Errorf("no suitable decryption key found")
-		}
-	*/
+	if plaintext != nil {
+		return plaintext, nil
+	}
+	if err == nil {
+		return nil, fmt.Errorf("no suitable decryption key found")
+	}
 	return nil, err
 }
 

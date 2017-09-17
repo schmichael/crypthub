@@ -8,16 +8,48 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"golang.org/x/crypto/ssh"
 )
 
-func encrypt(r io.Reader, ghUser string) ([]byte, error) {
-	pubkey, err := getPubKey(ghUser)
-	if err != nil {
-		return nil, err
+func encrypt(r io.Reader, keyid string) ([]byte, error) {
+	var pubkey ssh.PublicKey
+
+	err := walkSSHDir(func(path string, info os.FileInfo, err error) error {
+		//TODO parse authorized_keys
+
+		log.Printf("path: %q ext: %q", path, filepath.Ext(path))
+		if filepath.Ext(path) != ".pub" {
+			return nil
+		}
+
+		raw, err := ioutil.ReadFile(path)
+		if err != nil {
+			log.Printf("error reading public key file %q: %v", path, err)
+		}
+
+		out, comment, options, _, err := ssh.ParseAuthorizedKey(raw)
+		if err != nil {
+			log.Printf("error parsing public key file %q: %v", path, err)
+		}
+
+		if comment == keyid {
+			log.Printf("Using %q (%q) from file %q", comment, options, path)
+			pubkey = out
+			return io.EOF
+		}
+		return nil
+	})
+
+	if pubkey == nil {
+		pubkey, err = getPubKey(keyid)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	switch k := pubkey.(type) {
