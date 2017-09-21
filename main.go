@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"flag"
+	"io/ioutil"
 	"log"
 	"os"
 )
@@ -21,18 +23,31 @@ func main() {
 	switch op {
 	case "encrypt", "e":
 		user := flag.Arg(1)
-		ciphertext, err := encrypt(os.Stdin, user)
-		if err != nil {
-			log.Printf("error encrypting for user %q: %v", user, err)
-			os.Exit(1)
-		}
+		if user != "" {
+			ciphertext, err := encrypt(os.Stdin, user)
+			if err != nil {
+				log.Printf("error encrypting for user %q: %v", user, err)
+				os.Exit(1)
+			}
 
-		out := base64.NewEncoder(base64.StdEncoding, os.Stdout)
-		_, err = out.Write(ciphertext)
-		out.Close()
-		if err != nil {
-			log.Printf("error encoding ciphertext: %v", err)
-			os.Exit(1)
+			out := base64.NewEncoder(base64.StdEncoding, os.Stdout)
+			_, err = out.Write(ciphertext)
+			out.Close()
+			if err != nil {
+				log.Printf("error encoding ciphertext: %v", err)
+				os.Exit(1)
+			}
+		} else {
+
+			box, err := encryptAll(os.Stdin)
+			if err != nil {
+				log.Printf("error encrypting: %v", err)
+				os.Exit(1)
+			}
+			if err := json.NewEncoder(os.Stdout).Encode(box); err != nil {
+				log.Printf("error encoding box: %v", err)
+				os.Exit(1)
+			}
 		}
 	case "decrypt", "d":
 		fn := flag.Arg(1)
@@ -40,16 +55,32 @@ func main() {
 			log.Printf("missing filename to decrypt")
 			os.Exit(1)
 		}
-		f, err := os.Open(fn)
+		ciphertext, err := ioutil.ReadFile(fn)
 		if err != nil {
-			log.Printf("error opening %q: %v", fn, err)
+			log.Printf("error reading %q: %v", fn, err)
 			os.Exit(1)
 		}
-		in := base64.NewDecoder(base64.StdEncoding, f)
-		plaintext, err := decrypt(in)
-		if err != nil {
-			log.Printf("error decrypting: %v", err)
-			os.Exit(1)
+
+		var box SecretishBox
+		var plaintext []byte
+		if err := json.Unmarshal(ciphertext, &box); err == nil {
+			// It's a json box!
+			plaintext, err = decryptBox(&box)
+			if err != nil {
+				log.Printf("error decrypting box: %v", err)
+				os.Exit(1)
+			}
+		} else {
+			var in []byte
+			if _, err := base64.StdEncoding.Decode(in, ciphertext); err != nil {
+				log.Printf("error decoding ciphertext: %v", err)
+				os.Exit(1)
+			}
+			plaintext, err = decryptBytes(in)
+			if err != nil {
+				log.Printf("error decrypting: %v", err)
+				os.Exit(1)
+			}
 		}
 
 		_, err = os.Stdout.Write(plaintext)

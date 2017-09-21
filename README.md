@@ -11,3 +11,20 @@ echo "foo" | crypthub encrypt schmichael
 
 # crypthub decrypt doesn't work yet because private keys are tricky to read
 ```
+
+## envelope
+
+```json
+{
+  "key": [
+    {
+      "ciphertext": "<base64 encoded ciphertext>"
+    }
+  ],
+  "nonce": "<base64 encoded nonce>",
+  "ciphertext": "<base64 encoded ciphertext>"
+}
+```
+
+Key is a list multiple encrypted versions of the symmetric key used to encrypt
+the ciphertext.
