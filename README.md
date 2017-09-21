@@ -18,6 +18,8 @@ echo "foo" | crypthub encrypt schmichael
 {
   "key": [
     {
+      "comment": "<key comment string>",
+      "filename": "<filename of public key>",
       "ciphertext": "<base64 encoded ciphertext>"
     }
   ],

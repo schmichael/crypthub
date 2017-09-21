@@ -54,7 +54,7 @@ func encryptKey(key []byte, box *SecretishBox) error {
 			log.Printf("error reading public key file %q: %v", path, err)
 		}
 
-		out, _, _, _, err := ssh.ParseAuthorizedKey(raw)
+		out, comment, _, _, err := ssh.ParseAuthorizedKey(raw)
 		if err != nil {
 			log.Printf("error parsing public key file %q: %v", path, err)
 		}
@@ -66,7 +66,13 @@ func encryptKey(key []byte, box *SecretishBox) error {
 				log.Printf("error encrypting key with pubkey %q: %v", path, err)
 				return nil
 			}
-			box.Key = append(box.Key, &EncryptedKey{Ciphertext: cipherkey})
+			_, fn := filepath.Split(path)
+			box.Key = append(box.Key, &EncryptedKey{
+				Comment:    comment,
+				Filename:   fn,
+				Type:       out.Type(),
+				Ciphertext: cipherkey,
+			})
 		default:
 			log.Printf("pubkey not suitable for crypto (expected ssh.CryptoPublicKey but found %T)", k)
 		}

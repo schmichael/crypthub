@@ -44,7 +44,9 @@ func main() {
 				log.Printf("error encrypting: %v", err)
 				os.Exit(1)
 			}
-			if err := json.NewEncoder(os.Stdout).Encode(box); err != nil {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			if err := enc.Encode(box); err != nil {
 				log.Printf("error encoding box: %v", err)
 				os.Exit(1)
 			}
