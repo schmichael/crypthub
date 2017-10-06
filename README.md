@@ -28,5 +28,5 @@ echo "foo" | crypthub encrypt schmichael
 }
 ```
 
-Key is a list multiple encrypted versions of the symmetric key used to encrypt
+Key is a list of multiple encrypted versions of the symmetric key used to encrypt
 the ciphertext.
